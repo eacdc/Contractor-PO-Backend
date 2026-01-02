@@ -72,6 +72,8 @@ router.get('/pending/jobopsmaster/:jobNumber', async (req, res) => {
 
     res.json({
       jobNumber,
+      clientName: jobOpsMaster.clientName || '',
+      jobTitle: jobOpsMaster.jobTitle || '',
       operations: operationsWithNames
     });
   } catch (error) {

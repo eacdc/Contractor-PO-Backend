@@ -44,6 +44,16 @@ const jobSubSchema = new mongoose.Schema({
     required: true,
     trim: true,
   },
+  clientName: {
+    type: String,
+    trim: true,
+    default: '',
+  },
+  jobTitle: {
+    type: String,
+    trim: true,
+    default: '',
+  },
   ops: [operationSubSchema],
 }, { _id: false });
 

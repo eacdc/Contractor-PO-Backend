@@ -158,6 +158,8 @@ router.post('/', async (req, res) => {
       contractorName: contractorName.trim(),
       jobs: jobs.map(job => ({
         jobNumber: job.jobNumber,
+        clientName: job.clientName || '',
+        jobTitle: job.jobTitle || '',
         ops: job.ops.map(op => {
           // Save qtyBook and rate as is, no calculations
           return {
@@ -261,6 +263,8 @@ router.put('/:billNumber', async (req, res) => {
 
       bill.jobs = jobs.map(job => ({
         jobNumber: job.jobNumber,
+        clientName: job.clientName || '',
+        jobTitle: job.jobTitle || '',
         ops: job.ops.map(op => {
           // Save qtyBook and rate as is, no calculations
           return {
