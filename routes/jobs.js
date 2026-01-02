@@ -477,7 +477,11 @@ router.post('/jobopsmaster', async (req, res) => {
 
       operations,
 
-      qty
+      qty,
+
+      clientName,
+
+      jobTitle
 
     } = req.body;
 
@@ -615,6 +619,10 @@ router.post('/jobopsmaster', async (req, res) => {
 
         totalQty,
 
+        clientName: clientName || '',
+
+        jobTitle: jobTitle || '',
+
         ops
 
       });
@@ -624,6 +632,20 @@ router.post('/jobopsmaster', async (req, res) => {
       // Update totalQty (use the latest value from UI)
 
       jobOpsMaster.totalQty = totalQty;
+
+      // Update clientName and jobTitle if provided
+
+      if (clientName !== undefined) {
+
+        jobOpsMaster.clientName = clientName || '';
+
+      }
+
+      if (jobTitle !== undefined) {
+
+        jobOpsMaster.jobTitle = jobTitle || '';
+
+      }
 
       
 
