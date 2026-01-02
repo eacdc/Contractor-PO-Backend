@@ -18,6 +18,30 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'At least one valid job number is required' });
     }
 
+    // Check if any job number is already in another series
+    const existingSeriesWithJobs = await Series.find({
+      jobNumbers: { $in: validJobNumbers }
+    });
+    
+    if (existingSeriesWithJobs.length > 0) {
+      // Find which jobs are already in series
+      const jobsInSeries = new Set();
+      existingSeriesWithJobs.forEach(series => {
+        series.jobNumbers.forEach(jn => {
+          if (validJobNumbers.includes(jn)) {
+            jobsInSeries.add(jn);
+          }
+        });
+      });
+      
+      if (jobsInSeries.size > 0) {
+        const jobsList = Array.from(jobsInSeries).join(', ');
+        return res.status(400).json({ 
+          error: `Job number(s) ${jobsList} is/are already in another series. A job cannot be added to multiple series.` 
+        });
+      }
+    }
+
     // Check if a series with the exact same job numbers already exists
     // First, find series with the same count (optimization)
     const sortedValidJobNumbers = [...validJobNumbers].sort();
