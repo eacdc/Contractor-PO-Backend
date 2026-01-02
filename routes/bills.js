@@ -159,21 +159,11 @@ router.post('/', async (req, res) => {
       jobs: jobs.map(job => ({
         jobNumber: job.jobNumber,
         ops: job.ops.map(op => {
-          // Get operation type
-          const opIdStr = String(op.opId || '');
-          const operationType = operationTypeMap[opIdStr];
-          const actualQtyBook = Number(op.qtyBook);
-          
-          // For 1/x type operations, save qtyBook as 1/actual qtyBook
-          let qtyBookToSave = actualQtyBook;
-          if (operationType === '1/x' && actualQtyBook > 0) {
-            qtyBookToSave = 1 / actualQtyBook;
-          }
-          
+          // Save qtyBook and rate as is, no calculations
           return {
             opsName: op.opsName.trim(),
-            qtyBook: qtyBookToSave,
-            rate: Number(op.rate),
+            qtyBook: Number(op.qtyBook), // Save qtyBook as is, no calculation
+            rate: Number(op.rate), // Save rate (which contains valuePerBook) as is, no calculation
             qtyCompleted: Number(op.qtyCompleted),
             totalValue: Number(op.totalValue)
           };
@@ -272,21 +262,11 @@ router.put('/:billNumber', async (req, res) => {
       bill.jobs = jobs.map(job => ({
         jobNumber: job.jobNumber,
         ops: job.ops.map(op => {
-          // Get operation type
-          const opIdStr = String(op.opId || '');
-          const operationType = operationTypeMap[opIdStr];
-          const actualQtyBook = Number(op.qtyBook);
-          
-          // For 1/x type operations, save qtyBook as 1/actual qtyBook
-          let qtyBookToSave = actualQtyBook;
-          if (operationType === '1/x' && actualQtyBook > 0) {
-            qtyBookToSave = 1 / actualQtyBook;
-          }
-          
+          // Save qtyBook and rate as is, no calculations
           return {
             opsName: op.opsName.trim(),
-            qtyBook: qtyBookToSave,
-            rate: Number(op.rate),
+            qtyBook: Number(op.qtyBook), // Save qtyBook as is, no calculation
+            rate: Number(op.rate), // Save rate (which contains valuePerBook) as is, no calculation
             qtyCompleted: Number(op.qtyCompleted),
             totalValue: Number(op.totalValue)
           };

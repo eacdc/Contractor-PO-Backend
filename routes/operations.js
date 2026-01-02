@@ -49,7 +49,7 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Operation name, type, and rate/unit are required' });
     }
 
-    const ratePerUnitNum = Number(ratePerUnit);
+    const ratePerUnitNum = parseFloat(Number(ratePerUnit).toFixed(4));
     if (isNaN(ratePerUnitNum) || ratePerUnitNum < 0) {
       return res.status(400).json({ error: 'Rate/unit must be a valid number greater than or equal to 0' });
     }
@@ -90,7 +90,7 @@ router.put('/:id', async (req, res) => {
       return res.status(400).json({ error: 'Operation name, type, and rate/unit are required' });
     }
 
-    const ratePerUnitNum = Number(ratePerUnit);
+    const ratePerUnitNum = parseFloat(Number(ratePerUnit).toFixed(4));
     if (isNaN(ratePerUnitNum) || ratePerUnitNum < 0) {
       return res.status(400).json({ error: 'Rate/unit must be a valid number greater than or equal to 0' });
     }

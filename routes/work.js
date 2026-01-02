@@ -172,21 +172,11 @@ router.post('/update/jobopsmaster', async (req, res) => {
         continue;
       }
 
-      // Find the operation in the ops array using opsName + valuePerBook as unique key
-      // Since JobOpsMaster doesn't store opsName, we need to fetch it from Operation collection
+      // Find the operation in the ops array using opId only
       const normalizedOpsName = opsName.trim();
-      const normalizedValuePerBook = parseFloat(Number(valuePerBook).toFixed(2));
-      
-      // Validate numeric conversion
-      if (isNaN(normalizedValuePerBook)) {
-        console.warn('Invalid valuePerBook for operation:', { opId, opsName, valuePerBook });
-        continue;
-      }
       
       const jobOp = jobOpsMaster.ops.find(jop => {
-        const jopOpsName = operationNameMap[String(jop.opId)] || 'Unknown';
-        const jopValuePerBook = parseFloat(Number(jop.valuePerBook).toFixed(2));
-        return jopOpsName === normalizedOpsName && jopValuePerBook === normalizedValuePerBook;
+        return String(jop.opId) === String(opId);
       });
       
       if (!jobOp) {
@@ -251,14 +241,11 @@ router.post('/update/jobopsmaster', async (req, res) => {
     });
 
     if (contractorWD) {
-      // For each operation, check if entry with same opsName + valuePerBook exists
+      // For each operation, check if entry with same opsId exists
       for (const newOp of contractorWDOps) {
-        // Round valuePerBook to 2 decimal places for comparison
-        const newOpValuePerBook = parseFloat(Number(newOp.valuePerBook).toFixed(2));
-        // Find existing entry with same opsName + valuePerBook
+        // Find existing entry with same opsId
         const existingOp = contractorWD.opsDone.find(od => {
-          const odValuePerBook = parseFloat(Number(od.valuePerBook).toFixed(2));
-          return od.opsName === newOp.opsName && odValuePerBook === newOpValuePerBook;
+          return String(od.opsId) === String(newOp.opsId);
         });
         
         if (existingOp) {

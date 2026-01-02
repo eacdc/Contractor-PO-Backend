@@ -135,10 +135,10 @@ router.get('/search/:jobNumber', async (req, res) => {
 
 
         // Aggregate completed quantities by operation and contractor
-        // Use opsName + valuePerBook (rounded to 2 decimals) as key for matching
+        // Use opId as key for matching
         const quantitiesByOpAndContractor = {};
 
-        const totalCompletedByOp = {}; // Track total completed across all contractors (key: opsName_valuePerBook)
+        const totalCompletedByOp = {}; // Track total completed across all contractors (key: opId)
 
 
 
@@ -148,18 +148,14 @@ router.get('/search/:jobNumber', async (req, res) => {
 
           (doc.opsDone || []).forEach(od => {
 
-            if (!od.opsId || !od.opsName || od.opsDoneQty == null || od.valuePerBook == null) {
+            if (!od.opsId || od.opsDoneQty == null) {
 
               return;
 
             }
 
-            // Round valuePerBook to 2 decimal places for matching
-            const odValuePerBook = parseFloat(Number(od.valuePerBook).toFixed(2));
-            const odOpsName = od.opsName.trim();
-            
-            // Create composite key: opsName_valuePerBook
-            const opKey = `${odOpsName}_${odValuePerBook}`;
+            // Use opId as key for matching
+            const opKey = String(od.opsId);
 
             // Only count if this opId exists in JobopsMaster (preliminary check)
             if (opIds.includes(od.opsId)) {
@@ -199,7 +195,7 @@ router.get('/search/:jobNumber', async (req, res) => {
 
 
         // Build previousOps from JobopsMaster.ops
-        // Match using opsName + valuePerBook (rounded to 2 decimals)
+        // Match using opId only
 
         previousOps = {
 
@@ -215,12 +211,11 @@ router.get('/search/:jobNumber', async (req, res) => {
 
             const totalOpsQty = op.totalOpsQty || 0;
             
-            // Get opsName and valuePerBook for this operation
+            // Get opsName for this operation
             const opOpsName = opsNameById[op.opId] || 'Unknown';
-            const opValuePerBook = parseFloat(Number(op.valuePerBook || 0).toFixed(2));
             
-            // Create composite key: opsName_valuePerBook for matching
-            const opKey = `${opOpsName}_${opValuePerBook}`;
+            // Use opId as key for matching
+            const opKey = String(op.opId);
 
             const totalCompleted = totalCompletedByOp[opKey] || 0;
 
@@ -530,7 +525,7 @@ router.post('/jobopsmaster', async (req, res) => {
 
         const qtyPerBookNum = Number(qtyPerBook);
 
-        const valuePerBookNum = Number(ratePerBook);
+        const valuePerBookNum = parseFloat(Number(ratePerBook).toFixed(4));
 
 
 
@@ -545,16 +540,27 @@ router.post('/jobopsmaster', async (req, res) => {
         const operationType = operationTypeMap[opIdStr];
         const opsName = operationNameMap[opIdStr] || 'Unknown';
         
-        // Calculate totalOpsQty based on operation type
-        // For 1/x: totalOpsQty = totalQty / qtyPerBook (books/ops)
-        // For others (1:1, 1*x): totalOpsQty = qtyPerBook * totalQty
+        // For 1/x operations: save qtyPerBook as (1/qtyPerBook value) and totalOpsQty = totalQty
+        // For 1*x operations: save qtyPerBook as is and totalOpsQty = totalQty
+        // For 1:1 operations: save qtyPerBook as is and totalOpsQty = qtyPerBook * totalQty
+        let savedQtyPerBook;
         let totalOpsQty;
         if (operationType === '1/x') {
-          // For 1/x, qtyPerBook is books/ops, so totalOpsQty = qty / (books/ops)
-          totalOpsQty = qtyPerBookNum > 0 ? totalQty / qtyPerBookNum : 0;
-          console.log(`[1/x] Operation ${opIdStr}: totalQty=${totalQty}, qtyPerBook=${qtyPerBookNum}, totalOpsQty=${totalOpsQty}`);
+          // For 1/x: save qtyPerBook as 1/qtyPerBook (e.g., if user enters 4, save 1/4 = 0.25)
+          savedQtyPerBook = qtyPerBookNum > 0 ? parseFloat((1 / qtyPerBookNum).toFixed(4)) : 0;
+          // For 1/x: totalOpsQty = totalQty (no calculation)
+          totalOpsQty = totalQty;
+          console.log(`[1/x] Operation ${opIdStr}: totalQty=${totalQty}, user qtyPerBook=${qtyPerBookNum}, saved qtyPerBook=${savedQtyPerBook}, totalOpsQty=${totalOpsQty}`);
+        } else if (operationType === '1*x') {
+          // For 1*x: save qtyPerBook as is (no conversion)
+          savedQtyPerBook = qtyPerBookNum;
+          // For 1*x: totalOpsQty = totalQty (no calculation)
+          totalOpsQty = totalQty;
+          console.log(`[1*x] Operation ${opIdStr}: totalQty=${totalQty}, qtyPerBook=${qtyPerBookNum}, totalOpsQty=${totalOpsQty}`);
         } else {
-          // For 1:1 and 1*x, use the standard formula
+          // For 1:1: save qtyPerBook as is
+          savedQtyPerBook = qtyPerBookNum;
+          // For 1:1: totalOpsQty = qtyPerBook * totalQty
           totalOpsQty = qtyPerBookNum * totalQty;
           if (operationType) {
             console.log(`[${operationType}] Operation ${opIdStr}: totalQty=${totalQty}, qtyPerBook=${qtyPerBookNum}, totalOpsQty=${totalOpsQty}`);
@@ -569,7 +575,7 @@ router.post('/jobopsmaster', async (req, res) => {
 
           opId: String(operationId),
 
-          qtyPerBook: qtyPerBookNum,
+          qtyPerBook: savedQtyPerBook,
 
           totalOpsQty,
 
@@ -632,27 +638,23 @@ router.post('/jobopsmaster', async (req, res) => {
       });
 
       // Process each new operation
-      // Use opsName + valuePerBook as unique key
+      // Use opId as unique key - prevent duplicate operations regardless of valuePerBook
       for (const newOp of ops) {
         // Get opsName for this operation
         const opIdStr = String(newOp.opId);
         const opsName = allOperationNameMap[opIdStr] || 'Unknown';
         
-        // Find existing operation with same opsName + valuePerBook
+        // Find existing operation with same opId (prevent duplicates by operation ID only)
         const existingOpIndex = jobOpsMaster.ops.findIndex(existingOp => {
-          // Get opsName for existing operation
           const existingOpIdStr = String(existingOp.opId);
-          const existingOpsName = allOperationNameMap[existingOpIdStr] || 'Unknown';
-          return existingOpsName === opsName && existingOp.valuePerBook === newOp.valuePerBook;
+          return existingOpIdStr === opIdStr;
         });
         
         if (existingOpIndex !== -1) {
-          // Update existing operation: update totalOpsQty and pendingOpsQty
-          const existingOp = jobOpsMaster.ops[existingOpIndex];
-          // Add to existing quantities
-          existingOp.totalOpsQty += newOp.totalOpsQty;
-          existingOp.pendingOpsQty += newOp.pendingOpsQty;
-          existingOp.lastUpdatedDate = new Date();
+          // Operation already exists - reject duplicate
+          return res.status(400).json({ 
+            error: `Operation "${opsName}" is already added to this job. Duplicate operations are not allowed.` 
+          });
         } else {
           // Add new operation
           jobOpsMaster.ops.push(newOp);
