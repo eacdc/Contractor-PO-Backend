@@ -334,6 +334,13 @@ router.delete('/:billNumber', async (req, res) => {
       return res.status(404).json({ error: 'Bill not found or already deleted' });
     }
 
+    // Find contractorId from contractorName (once, outside the loop)
+    const contractor = await Contractor.findOne({ name: bill.contractorName.trim() });
+    if (!contractor) {
+      return res.status(404).json({ error: `Contractor not found for name: ${bill.contractorName}` });
+    }
+    const contractorId = contractor.contractorId;
+
     // Update JobopsMaster: increase pendingOpsQty for each operation
     for (const job of bill.jobs) {
       const jobOpsMaster = await JobopsMaster.findOne({ jobId: job.jobNumber });
