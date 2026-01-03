@@ -2,8 +2,9 @@ const express = require('express');
 const router = express.Router();
 const Bill = require('../models/Bill');
 const Operation = require('../models/Operation');
-const JobopsMaster = require('../models/JobopsMaster');
+const JobopsMaster = require('../models/JobOpsMaster');
 const ContractorWD = require('../models/ContractorWD');
+const Contractor = require('../models/Contractor');
 const mongoose = require('mongoose');
 
 // Helper function to generate next bill number (8-digit, starting from 00000001)
