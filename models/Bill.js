@@ -80,6 +80,11 @@ const billSchema = new mongoose.Schema({
     type: Date,
     default: null,
   },
+  isDeleted: {
+    type: Number,
+    default: 0,
+    enum: [0, 1],
+  },
   jobs: [jobSubSchema],
 }, {
   collection: 'Bills',

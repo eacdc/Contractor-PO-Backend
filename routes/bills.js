@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const Bill = require('../models/Bill');
 const Operation = require('../models/Operation');
+const JobopsMaster = require('../models/JobopsMaster');
+const ContractorWD = require('../models/ContractorWD');
 const mongoose = require('mongoose');
 
 // Helper function to generate next bill number (8-digit, starting from 00000001)
@@ -27,10 +29,17 @@ async function generateNextBillNumber() {
   }
 }
 
-// Get all bills
+// Get all bills (excluding deleted ones)
+// Handles both new bills (with isDeleted field) and old bills (without isDeleted field)
 router.get('/', async (req, res) => {
   try {
-    const bills = await Bill.find().sort({ billNumber: -1 });
+    // Query: isDeleted is not 1, OR isDeleted field doesn't exist (for backward compatibility)
+    const bills = await Bill.find({
+      $or: [
+        { isDeleted: { $ne: 1 } },
+        { isDeleted: { $exists: false } }
+      ]
+    }).sort({ billNumber: -1 });
     res.json(bills);
   } catch (error) {
     console.error('Error fetching bills:', error);
@@ -307,20 +316,94 @@ router.patch('/:billNumber/pay', async (req, res) => {
   }
 });
 
-// Delete bill
+// Soft delete bill (set isDeleted = 1 and update pending/completed quantities)
 router.delete('/:billNumber', async (req, res) => {
   try {
     const { billNumber } = req.params;
-    const bill = await Bill.findOneAndDelete({ billNumber });
+    // Query: billNumber matches AND (isDeleted is not 1 OR isDeleted doesn't exist)
+    const bill = await Bill.findOne({
+      billNumber,
+      $or: [
+        { isDeleted: { $ne: 1 } },
+        { isDeleted: { $exists: false } }
+      ]
+    });
     
     if (!bill) {
-      return res.status(404).json({ error: 'Bill not found' });
+      return res.status(404).json({ error: 'Bill not found or already deleted' });
     }
+
+    // Update JobopsMaster: increase pendingOpsQty for each operation
+    for (const job of bill.jobs) {
+      const jobOpsMaster = await JobopsMaster.findOne({ jobId: job.jobNumber });
+      
+      if (jobOpsMaster) {
+        for (const op of job.ops) {
+          // Find the operation by opsName to get its ID
+          const operation = await Operation.findOne({ opsName: op.opsName.trim() });
+          
+          if (operation) {
+            const opIdStr = operation._id.toString();
+            const jobOp = jobOpsMaster.ops.find(jop => String(jop.opId) === opIdStr);
+            
+            if (jobOp) {
+              const qtyCompleted = Number(op.qtyCompleted || 0);
+              // Increase pendingOpsQty (reverse the deduction that was made when bill was created)
+              jobOp.pendingOpsQty = Math.max(0, jobOp.pendingOpsQty + qtyCompleted);
+              jobOp.lastUpdatedDate = new Date();
+            }
+          }
+        }
+        
+        await jobOpsMaster.save();
+      }
+
+      // Update Contractor_WD: decrease opsDoneQty for each operation
+      const contractorWD = await ContractorWD.findOne({
+        contractorId: contractorId,
+        jobId: job.jobNumber
+      });
+      
+      if (contractorWD) {
+        for (const op of job.ops) {
+          // Find the operation in Contractor_WD
+          const operation = await Operation.findOne({ opsName: op.opsName.trim() });
+          
+          if (operation) {
+            const opIdStr = operation._id.toString();
+            const wdOp = contractorWD.opsDone.find(od => String(od.opsId) === opIdStr);
+            
+            if (wdOp) {
+              const qtyCompleted = Number(op.qtyCompleted || 0);
+              // Decrease opsDoneQty (reverse the addition that was made when bill was created)
+              wdOp.opsDoneQty = Math.max(0, wdOp.opsDoneQty - qtyCompleted);
+              
+              // If opsDoneQty becomes 0, we could remove the entry, but let's keep it
+              // Remove entry if qty becomes 0 or less
+              if (wdOp.opsDoneQty <= 0) {
+                contractorWD.opsDone = contractorWD.opsDone.filter(od => String(od.opsId) !== opIdStr);
+              }
+            }
+          }
+        }
+        
+        // Only save if there are still operations, otherwise delete the document
+        if (contractorWD.opsDone.length > 0) {
+          await contractorWD.save();
+        } else {
+          await ContractorWD.deleteOne({ _id: contractorWD._id });
+        }
+      }
+    }
+
+    // Soft delete the bill
+    bill.isDeleted = 1;
+    await bill.save();
     
     res.json({ message: 'Bill deleted successfully' });
   } catch (error) {
     console.error('Error deleting bill:', error);
-    res.status(500).json({ error: 'Error deleting bill' });
+    res.status(500).json({ error: 'Error deleting bill', details: error.message });
   }
 });
 
